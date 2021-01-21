@@ -1,0 +1,2 @@
+2021-01-19 07:42, 1933.71_Crypto_trader, test episodes:1000, net worth:1078.6216040753616, orders per episode:135.945, no profit episodes:1, comment: Dense network
+2021-01-21 16:52, 1933.71_Crypto_trader, test episodes:10, net worth:1079.8642654888695, orders per episode:139.0, no profit episodes:0, model: Dense, comment: 
