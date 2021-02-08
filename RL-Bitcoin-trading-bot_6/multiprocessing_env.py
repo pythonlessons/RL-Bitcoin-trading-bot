@@ -2,7 +2,7 @@
 #
 #   File name   : multiprocessing_env.py
 #   Author      : PyLessons
-#   Created date: 2021-..-..
+#   Created date: 2021-02-08
 #   Website     : https://pylessons.com/
 #   GitHub      : https://github.com/pythonlessons/RL-Bitcoin-trading-bot
 #   Description : functions to train/test multiple custom BTC trading environments
