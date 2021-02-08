@@ -1,0 +1,10 @@
+training start: 2021-01-31 20:04
+initial_balance: 1000
+training episodes: 200000
+lookback_window_size: 50
+lr: 1e-05
+epochs: 5
+batch size: 128
+normalize_value: 40000
+model: LSTM
+training end: 2021-02-03 14:49
