@@ -1,0 +1,5 @@
+2021-02-01 20:19, 1984.93_Crypto_trader, test episodes:1000, net worth:1262.4095575116696, orders per episode:236.972, no profit episodes:1, comment: Dense
+2021-02-01 20:20, 1914.81_Crypto_trader, test episodes:1000, net worth:1155.009664210779, orders per episode:297.674, no profit episodes:31, comment: Dense
+2021-02-01 20:30, 2961.57_Crypto_trader, test episodes:1000, net worth:1312.6941448123623, orders per episode:452.45, no profit episodes:0, comment: CNN
+2021-02-01 21:18, 3142.13_Crypto_trader, test episodes:1000, net worth:1485.8628866706822, orders per episode:541.328, no profit episodes:0, comment: CNN
+2021-02-03 20:52, 3146.45_Crypto_trader, test episodes:1000, net worth:1332.4514580243967, orders per episode:537.654, no profit episodes:0, comment: LSTM

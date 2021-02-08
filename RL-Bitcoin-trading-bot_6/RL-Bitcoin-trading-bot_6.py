@@ -432,7 +432,7 @@ if __name__ == "__main__":
     df = df.sort_values('Date')
     df = AddIndicators(df) # insert indicators to df
 
-    lookback_window_size = 100
+    lookback_window_size = 50
     test_window = 720*3 # 3 months 
     train_df = df[100:-test_window-lookback_window_size] # we leave 100 to have properly calculated indicators
     test_df = df[-test_window-lookback_window_size:]
