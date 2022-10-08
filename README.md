@@ -4,4 +4,4 @@ Right now I am planning to create 7 tutorials, we'll see where we can get with t
 
 ![AI trading bot](RL-Bitcoin-trading-bot_5/IMAGES/gameplay.gif)
 
-Trying to create Reinforcement Learning powered Bitcoin trading bot
+[Trying to create Reinforcement Learning powered Bitcoin trading bot](https://pylessons.com/RL-BTC-BOT)
