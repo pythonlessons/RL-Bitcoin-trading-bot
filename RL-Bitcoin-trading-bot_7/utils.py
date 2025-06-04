@@ -104,6 +104,7 @@ class TradingGraph:
 
         self.MACD = deque(maxlen=self.Render_range)
         self.RSI = deque(maxlen=self.Render_range)
+        self.vwap = deque(maxlen=self.Render_range)
 
 
     def Plot_indicators(self, df, Date_Render_range):
@@ -119,19 +120,25 @@ class TradingGraph:
 
         self.MACD.append(df["MACD"])
         self.RSI.append(df["RSI"])
+        self.vwap.append(df["vwap"])
 
         # Add Simple Moving Average
-        self.ax1.plot(Date_Render_range, self.sma7,'-')
-        self.ax1.plot(Date_Render_range, self.sma25,'-')
-        self.ax1.plot(Date_Render_range, self.sma99,'-')
+        self.ax1.plot(Date_Render_range, self.sma7,'-', label='SMA7')
+        self.ax1.plot(Date_Render_range, self.sma25,'-', label='SMA25')
+        self.ax1.plot(Date_Render_range, self.sma99,'-', label='SMA99')
 
         # Add Bollinger Bands
-        self.ax1.plot(Date_Render_range, self.bb_bbm,'-')
-        self.ax1.plot(Date_Render_range, self.bb_bbh,'-')
-        self.ax1.plot(Date_Render_range, self.bb_bbl,'-')
+        self.ax1.plot(Date_Render_range, self.bb_bbm,'-', label='BB_Mid')
+        self.ax1.plot(Date_Render_range, self.bb_bbh,'-', label='BB_High')
+        self.ax1.plot(Date_Render_range, self.bb_bbl,'-', label='BB_Low')
 
         # Add Parabolic Stop and Reverse
-        self.ax1.plot(Date_Render_range, self.psar,'.')
+        self.ax1.plot(Date_Render_range, self.psar,'.', label='PSAR')
+
+        # Add VWAP
+        self.ax1.plot(Date_Render_range, self.vwap, '--', label='VWAP')
+
+        self.ax1.legend(loc='upper left')
 
         self.ax4.clear()
         # # Add Moving Average Convergence Divergence

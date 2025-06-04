@@ -192,6 +192,7 @@ class CustomEnv:
         self.normalize_value = normalize_value
 
         self.fees = 0.001 # default Binance 0.1% order fees
+        self.action_penalty = 0.1 # penalty for taking a buy or sell action
 
         self.columns = list(self.df_normalized.columns[2:])
 
@@ -291,6 +292,10 @@ class CustomEnv:
 
         # Receive calculated reward
         reward = self.get_reward()
+
+        # Apply penalty for buy or sell actions
+        if action == 1 or action == 2: # Action 1: Buy, Action 2: Sell
+            reward -= self.action_penalty
 
         if self.net_worth <= self.initial_balance/2:
             done = True
@@ -455,37 +460,141 @@ def test_agent(test_df, test_df_nomalized, visualize=True, test_episodes=10, fol
         results.write(f', no profit episodes:{no_profit_episodes}, model: {agent.model}, comment: {comment}\n')
 
 
-if __name__ == "__main__":            
-    df = pd.read_csv('./BTCUSD_1h.csv')
-    df = df.dropna()
-    df = df.sort_values('Date')
+if __name__ == "__main__":
+    learning_rates_to_tune = [0.00005, 0.00001]
+    lookback_windows_to_tune = [50, 100]
+    test_window = 720*3 # 3 months - Fixed, could be made dynamic if needed
 
-    df = AddIndicators(df) # insert indicators to df 2021_02_21_17_54_Crypto_trader
-    #df = indicators_dataframe(df, threshold=0.5, plot=False) # insert indicators to df 2021_02_18_21_48_Crypto_trader
-    depth = len(list(df.columns[1:])) # OHCL + indicators without Date
+    for lw_size in lookback_windows_to_tune:
+        print(f"Starting tuning for Lookback Window Size: {lw_size}")
+        # Load and preprocess data for the current lookback window size
+        df_full = pd.read_csv('./BTCUSD_1h.csv')
+        df_full = df_full.dropna()
+        df_full = df_full.sort_values('Date')
 
-    df_nomalized = Normalizing(df[99:])[1:].dropna()
-    df = df[100:].dropna()
+        df_full = AddIndicators(df_full)
+        depth = len(list(df_full.columns[1:])) # OHCL + indicators without Date
 
-    lookback_window_size = 100
-    test_window = 720*3 # 3 months
+        # Ensure there's enough data for the lookback window before normalization
+        # Normalizing uses df[column].shift(1) so it needs at least 1 row prior to the intended start.
+        # If lw_size is 50, we need df_full[49:] for Normalizing to have its first valid row at index 50.
+        # Then [1:] on the result of Normalizing drops the first row which is all NaN due to .shift(1).
+        # So the first row of df_normalized corresponds to original df_full index lw_size.
+        if len(df_full) < lw_size:
+            print(f"Skipping lookback window {lw_size}: not enough data ({len(df_full)} rows)")
+            continue
+
+        df_normalized = Normalizing(df_full[lw_size-1:])[1:].dropna()
+        # df_current will start from where df_normalized starts, ensuring alignment
+        df_current = df_full[lw_size:].dropna()
+
+        # Reset index for df_current and df_normalized to ensure .loc works as expected in CustomEnv
+        df_current = df_current.reset_index(drop=True)
+        df_normalized = df_normalized.reset_index(drop=True)
+
+        # Ensure alignment and sufficient data after dropping NaNs
+        min_len = min(len(df_current), len(df_normalized))
+        df_current = df_current.iloc[:min_len]
+        df_normalized = df_normalized.iloc[:min_len]
+
+        if len(df_current) < test_window + lw_size : # Need enough data for test set and lookback
+            print(f"Skipping lookback window {lw_size}: not enough data for train/test split after processing ({len(df_current)} rows)")
+            continue
+
+        # Split training and testing datasets
+        # The dataframes df_current and df_normalized are now aligned and start from original index lw_size
+        train_df = df_current[:-test_window]
+        test_df = df_current[-test_window-lw_size:] # test_df needs to provide lookback_window_size history for the first test step
+
+        train_df_normalized = df_normalized[:-test_window]
+        test_df_normalized = df_normalized[-test_window-lw_size:]
+
+        # Re-check lengths before proceeding
+        if len(train_df) < lw_size or len(train_df_normalized) < lw_size:
+            print(f"Skipping lookback window {lw_size}: training data too short after split.")
+            continue
+        if len(test_df) < lw_size or len(test_df_normalized) < lw_size:
+            print(f"Skipping lookback window {lw_size}: test data too short after split.")
+            continue
+
+
+        for lr_to_tune in learning_rates_to_tune:
+            print(f"  Tuning with Learning Rate: {lr_to_tune}")
+
+            # Instantiate agent with current hyperparameters
+            agent = CustomAgent(lookback_window_size=lw_size,
+                                lr=lr_to_tune,
+                                epochs=5, # Example: fixed epochs, could be tuned
+                                optimizer=Adam,
+                                batch_size=32, # Example: fixed batch_size, could be tuned
+                                model="CNN", # Example: fixed model type
+                                depth=depth,
+                                comment=f"lr_{lr_to_tune}_lw_{lw_size}")
+
+            # Modify log_name to be unique
+            current_time_str = datetime.now().strftime("%Y_%m_%d_%H_%M")
+            agent.log_name = f"{current_time_str}_Crypto_trader_lr{lr_to_tune}_lw{lw_size}"
+
+            print(f"    Log name: {agent.log_name}")
+
+            # Training
+            # train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_worker = 32, training_batch_size=500, visualize=False, EPISODES=200000) # Original
+            # Using smaller EPISODES for quicker test runs during tuning
+            print(f"    Starting training for lr={lr_to_tune}, lw={lw_size}...")
+            train_multiprocessing(CustomEnv, agent,
+                                  df=train_df.copy(), df_normalized=train_df_normalized.copy(), # Pass copies to avoid issues with multiprocessing
+                                  num_worker=4, # Reduced for resource management, adjust as needed
+                                  training_batch_size=50, # Smaller for faster iterations
+                                  visualize=False,
+                                  EPISODES=200) # Significantly reduced for tuning
+            print(f"    Finished training for lr={lr_to_tune}, lw={lw_size}.")
+
+            # Testing
+            # test_multiprocessing(CustomEnv, CustomAgent, test_df, test_df_nomalized, num_worker = 16, visualize=True, test_episodes=1000, folder="2021_02_21_17_54_Crypto_trader", name="3263.63_Crypto_trader", comment="3 months") # Original
+            print(f"    Starting testing for lr={lr_to_tune}, lw={lw_size} (model from {agent.log_name})...")
+            test_multiprocessing(CustomEnv, CustomAgent,
+                                 df=test_df.copy(), df_normalized=test_df_normalized.copy(), # Pass copies
+                                 num_worker=4, # Reduced for resource management
+                                 visualize=False, # Usually False for automated tuning
+                                 test_episodes=10, # Reduced for faster iterations
+                                 folder=agent.log_name, # Folder where the trained model was saved
+                                 name="", # Let test_multiprocessing load the latest from Parameters.json in the folder
+                                 comment=f"tuned_lr_{lr_to_tune}_lw_{lw_size}_3_months_test")
+            print(f"    Finished testing for lr={lr_to_tune}, lw={lw_size}.")
+
+    print("Hyperparameter tuning finished.")
+
+    # Original single calls (commented out)
+    # df = pd.read_csv('./BTCUSD_1h.csv')
+    # df = df.dropna()
+    # df = df.sort_values('Date')
+
+    # df = AddIndicators(df) # insert indicators to df 2021_02_21_17_54_Crypto_trader
+    # #df = indicators_dataframe(df, threshold=0.5, plot=False) # insert indicators to df 2021_02_18_21_48_Crypto_trader
+    # depth = len(list(df.columns[1:])) # OHCL + indicators without Date
+
+    # df_nomalized = Normalizing(df[99:])[1:].dropna()
+    # df = df[100:].dropna()
+
+    # lookback_window_size = 100 # This was the fixed value
+    # test_window = 720*3 # 3 months
     
-    # split training and testing datasets
-    train_df = df[:-test_window-lookback_window_size] # we leave 100 to have properly calculated indicators
-    test_df = df[-test_window-lookback_window_size:]
+    # # split training and testing datasets
+    # train_df = df[:-test_window-lookback_window_size]
+    # test_df = df[-test_window-lookback_window_size:]
     
-    # split training and testing normalized datasets
-    train_df_nomalized = df_nomalized[:-test_window-lookback_window_size] # we leave 100 to have properly calculated indicators
-    test_df_nomalized = df_nomalized[-test_window-lookback_window_size:]
+    # # split training and testing normalized datasets
+    # train_df_nomalized = df_nomalized[:-test_window-lookback_window_size]
+    # test_df_nomalized = df_nomalized[-test_window-lookback_window_size:]
 
-    # single processing training
-    #agent = CustomAgent(lookback_window_size=lookback_window_size, lr=0.00001, epochs=5, optimizer=Adam, batch_size = 32, model="CNN")
-    #train_env = CustomEnv(df=train_df, df_normalized=train_df_nomalized, lookback_window_size=lookback_window_size)
-    #train_agent(train_env, agent, visualize=False, train_episodes=50000, training_batch_size=500)
+    # # single processing training
+    # #agent = CustomAgent(lookback_window_size=lookback_window_size, lr=0.00001, epochs=5, optimizer=Adam, batch_size = 32, model="CNN")
+    # #train_env = CustomEnv(df=train_df, df_normalized=train_df_nomalized, lookback_window_size=lookback_window_size)
+    # #train_agent(train_env, agent, visualize=False, train_episodes=50000, training_batch_size=500)
 
-    # multiprocessing training/testing. Note - run from cmd or terminal
-    #agent = CustomAgent(lookback_window_size=lookback_window_size, lr=0.00001, epochs=5, optimizer=Adam, batch_size=32, model="CNN", depth=depth, comment="Normalized")
-    #train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_worker = 32, training_batch_size=500, visualize=False, EPISODES=200000)
+    # # multiprocessing training/testing. Note - run from cmd or terminal
+    # #agent = CustomAgent(lookback_window_size=lookback_window_size, lr=0.00001, epochs=5, optimizer=Adam, batch_size=32, model="CNN", depth=depth, comment="Normalized")
+    # #train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_worker = 32, training_batch_size=500, visualize=False, EPISODES=200000)
 
-    #test_multiprocessing(CustomEnv, CustomAgent, test_df, test_df_nomalized, num_worker = 16, visualize=False, test_episodes=1000, folder="2021_02_18_21_48_Crypto_trader", name="3906.52_Crypto_trader", comment="3 months")
-    test_multiprocessing(CustomEnv, CustomAgent, test_df, test_df_nomalized, num_worker = 16, visualize=True, test_episodes=1000, folder="2021_02_21_17_54_Crypto_trader", name="3263.63_Crypto_trader", comment="3 months")
+    # #test_multiprocessing(CustomEnv, CustomAgent, test_df, test_df_nomalized, num_worker = 16, visualize=False, test_episodes=1000, folder="2021_02_18_21_48_Crypto_trader", name="3906.52_Crypto_trader", comment="3 months")
+    # #test_multiprocessing(CustomEnv, CustomAgent, test_df, test_df_nomalized, num_worker = 16, visualize=True, test_episodes=1000, folder="2021_02_21_17_54_Crypto_trader", name="3263.63_Crypto_trader", comment="3 months")

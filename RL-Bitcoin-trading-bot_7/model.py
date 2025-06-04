@@ -11,7 +11,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense, Flatten, Conv1D, MaxPooling1D#, LSTM
+from tensorflow.keras.layers import Input, Dense, Flatten, Conv1D, MaxPooling1D, Dropout #, LSTM
 from tensorflow.compat.v1.keras.layers import CuDNNLSTM as LSTM # only for GPU
 from tensorflow.keras import backend as K
 #tf.config.experimental_run_functions_eagerly(True) # used for debuging and development
@@ -32,8 +32,10 @@ class Shared_Model:
         if model=="CNN":
             X = Conv1D(filters=64, kernel_size=6, padding="same", activation="tanh")(X_input)
             X = MaxPooling1D(pool_size=2)(X)
+            X = Dropout(0.25)(X) # Added Dropout
             X = Conv1D(filters=32, kernel_size=3, padding="same", activation="tanh")(X)
             X = MaxPooling1D(pool_size=2)(X)
+            X = Dropout(0.25)(X) # Added Dropout
             X = Flatten()(X)
 
         # Shared LSTM layers:
